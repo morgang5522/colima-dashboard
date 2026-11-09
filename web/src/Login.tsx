@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { post } from './api.ts';
+import { Logo } from './Logo.tsx';
+import { Spinner } from './ui/Spinner.tsx';
 
 export function Login({ passwordSet, onSignedIn }: { passwordSet: boolean; onSignedIn: () => void }) {
   const [password, setPassword] = useState('');
@@ -15,36 +17,43 @@ export function Login({ passwordSet, onSignedIn }: { passwordSet: boolean; onSig
       onSignedIn();
     } catch (err) {
       setError((err as Error).message);
-    } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="centered">
-      <form className="card login" onSubmit={submit}>
-        <h1>Colima Dashboard</h1>
-        {!passwordSet && (
-          <p className="banner warn">
-            No password set yet. On the host, run <code>npm run set-password</code> in the colima-dashboard folder, then
-            restart colima-dashboard.
+    <main className="login-page">
+      <form className="login" onSubmit={submit}>
+        <div className="wordmark wordmark-large">
+          <Logo size={26} />
+          <span>colima</span>
+        </div>
+        {!passwordSet ? (
+          <p className="notice notice-warn">
+            Set a password first: run <code>npm run set-password</code> in the colima-dashboard folder on the host, then
+            restart it.
           </p>
+        ) : (
+          <>
+            <label className="field">
+              <span>Password</span>
+              <input
+                type="password"
+                autoFocus
+                autoComplete="current-password"
+                value={password}
+                aria-invalid={Boolean(error)}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </label>
+            {error && <p className="field-error">{error}</p>}
+            <button className="btn btn-primary btn-block" disabled={busy || !password}>
+              {busy && <Spinner />}
+              Sign in
+            </button>
+          </>
         )}
-        <label>
-          Password
-          <input
-            type="password"
-            autoFocus
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
-        {error && <p className="error-text">{error}</p>}
-        <button className="primary" disabled={busy || !password}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
       </form>
-    </div>
+    </main>
   );
 }

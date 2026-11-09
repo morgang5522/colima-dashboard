@@ -1,8 +1,13 @@
+import { LogOut } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { api, post, type Host, type Job, type Profile } from './api.ts';
 import { Containers } from './Containers.tsx';
+import { JobConsole } from './JobConsole.tsx';
 import { Login } from './Login.tsx';
-import { ProfileCard } from './ProfileCard.tsx';
+import { Logo } from './Logo.tsx';
+import { MachineCard } from './MachineCard.tsx';
+import { ToastProvider } from './ui/Toasts.tsx';
+import { IconButton } from './ui/Tooltip.tsx';
 
 type SessionState = 'loading' | 'signed-out' | 'signed-in';
 
@@ -23,9 +28,13 @@ export function App() {
     return () => window.removeEventListener('colima-dashboard:signed-out', onSignedOut);
   }, [checkSession]);
 
-  if (session === 'loading') return <div className="centered muted">Loading…</div>;
+  if (session === 'loading') return null;
   if (session === 'signed-out') return <Login passwordSet={passwordSet} onSignedIn={() => setSession('signed-in')} />;
-  return <Dashboard onSignOut={() => setSession('signed-out')} />;
+  return (
+    <ToastProvider>
+      <Dashboard onSignOut={() => setSession('signed-out')} />
+    </ToastProvider>
+  );
 }
 
 function Dashboard({ onSignOut }: { onSignOut: () => void }) {
@@ -54,11 +63,11 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const busy = Boolean(profiles?.some((p) => p.job));
   useEffect(() => {
     void refresh();
-    const t = setInterval(() => void refresh(), busy ? 2000 : 8000);
+    const t = setInterval(() => void refresh(), busy ? 1500 : 8000);
     return () => clearInterval(t);
   }, [refresh, busy]);
 
-  // Keep showing a job's output after it finishes, until the next one starts.
+  // Keep a job's output on screen after it finishes, until it's dismissed or another starts.
   useEffect(() => {
     const active = profiles?.find((p) => p.job)?.job;
     if (active) setLastJob(active);
@@ -73,97 +82,68 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   };
 
   const current = profiles?.find((p) => p.name === selected) ?? null;
+  const several = (profiles?.length ?? 0) > 1;
 
   return (
-    <div className="page">
+    <div className="shell">
       <header className="topbar">
-        <div className="brand">
-          <span className="logo" aria-hidden>
-            ▣
-          </span>
-          Colima Dashboard
+        <div className="wordmark">
+          <Logo />
+          <span>colima</span>
         </div>
         {host && (
-          <span className="muted small hide-narrow">
-            Host: {host.cpus} CPUs · {host.memoryGiB} GiB
-          </span>
+          <div className="host-facts">
+            <span>{host.cpus} cores</span>
+            <span>{host.memoryGiB} GiB</span>
+          </div>
         )}
-        <button className="ghost" onClick={signOut}>
-          Sign out
-        </button>
+        <IconButton label="Sign out" placement="bottom-end" onClick={signOut}>
+          <LogOut size={16} />
+        </IconButton>
       </header>
 
-      {error && <div className="banner error">{error}</div>}
+      {error && <div className="notice notice-error">{error}</div>}
 
-      <main>
-        <section>
-          <h2 className="section-title">VMs</h2>
-          {profiles === null ? (
-            <p className="muted">Loading profiles…</p>
-          ) : profiles.length === 0 ? (
-            <p className="muted">No Colima profiles found.</p>
-          ) : (
-            <div className="profiles">
-              {profiles.map((p) => (
-                <ProfileCard
-                  key={p.name}
-                  profile={p}
-                  host={host}
-                  selected={p.name === selected}
-                  onSelect={() => setSelected(p.name)}
-                  onChanged={refresh}
-                  onJob={setLastJob}
-                />
-              ))}
+      <section aria-label="Virtual machines" className="machines">
+        {profiles?.length === 0 && (
+          <div className="empty">
+            No Colima VMs yet. Create one with <code>colima start</code>.
+          </div>
+        )}
+        {profiles?.map((p) => (
+          <MachineCard
+            key={p.name}
+            profile={p}
+            host={host}
+            selectable={several}
+            selected={several && p.name === selected}
+            onSelect={() => setSelected(p.name)}
+            onChanged={refresh}
+            onJob={setLastJob}
+          />
+        ))}
+        {lastJob && <JobConsole job={lastJob} onDismiss={() => setLastJob(null)} />}
+      </section>
+
+      {current && (
+        <section aria-label="Containers" className="containers-section">
+          <div className="section-head">
+            <h2>Containers</h2>
+            {several && <span className="section-sub">{current.name}</span>}
+          </div>
+          {current.job ? (
+            <div className="empty">Waiting for {current.job.title.toLowerCase()} to finish.</div>
+          ) : !current.running ? (
+            <div className="empty">{current.name} is stopped. Start it to see its containers.</div>
+          ) : current.runtime !== 'docker' ? (
+            <div className="empty">
+              Containers are only listed for the docker runtime. {current.name} uses {current.runtime}.
             </div>
+          ) : (
+            <Containers profile={current.name} />
           )}
-          {lastJob && <JobPanel job={lastJob} onClose={() => setLastJob(null)} />}
         </section>
-
-        {current && (
-          <section>
-            <h2 className="section-title">
-              Containers <span className="muted">in {current.name}</span>
-            </h2>
-            {current.running && !current.job && current.runtime !== 'docker' ? (
-              <p className="muted">
-                Containers are only shown for the docker runtime ({current.name} uses {current.runtime}).
-              </p>
-            ) : current.running && !current.job ? (
-              <Containers profile={current.name} />
-            ) : (
-              <p className="muted">
-                {current.job ? `${current.job.title} in progress…` : 'Start the VM to see its containers.'}
-              </p>
-            )}
-          </section>
-        )}
-      </main>
-    </div>
-  );
-}
-
-function JobPanel({ job, onClose }: { job: Job; onClose: () => void }) {
-  const label = { running: 'Running', succeeded: 'Done', failed: 'Failed' }[job.status];
-  return (
-    <div className={`job job-${job.status}`}>
-      <div className="job-head">
-        <strong>{job.title}</strong>
-        <span className={`pill pill-${job.status}`}>{label}</span>
-        {job.status !== 'running' && (
-          <button className="ghost small" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        )}
-      </div>
-      <pre
-        className="job-log"
-        ref={(el) => {
-          if (el) el.scrollTop = el.scrollHeight;
-        }}
-      >
-        {job.log.join('\n') || 'Starting…'}
-      </pre>
+      )}
     </div>
   );
 }
