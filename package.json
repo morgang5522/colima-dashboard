@@ -1,0 +1,57 @@
+{
+  "name": "colima-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A small web UI for Colima: manage VMs (start/stop, CPU, memory, disk) and their containers from a browser.",
+  "license": "MIT",
+  "author": "Morgan Graylane",
+  "homepage": "https://github.com/morgang5522/colima-dashboard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morgang5522/colima-dashboard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/morgang5522/colima-dashboard/issues"
+  },
+  "keywords": [
+    "colima",
+    "docker",
+    "containers",
+    "macos",
+    "lima",
+    "dashboard",
+    "web-ui"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev:server": "node --watch server/src/index.ts",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "node server/src/index.ts",
+    "set-password": "node server/src/cli.ts set-password",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm run format:check && npm test && npm run build"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.6",
+    "hono": "^4.13.17",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.7",
+    "vitest": "^5.1.0"
+  }
+}
