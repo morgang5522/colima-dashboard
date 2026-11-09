@@ -83,6 +83,9 @@ export function loadConfig(path = CONFIG_PATH): AppConfig {
   return resolveConfig(stored);
 }
 
+/** Shared by the CLI and the web form. */
+export const MIN_PASSWORD_LENGTH = 8;
+
 export function hashPassword(password: string): string {
   const salt = randomBytes(16);
   const hash = scryptSync(password, salt, 64);

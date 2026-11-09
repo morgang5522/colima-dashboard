@@ -76,7 +76,7 @@ Settings live in `~/.config/colima-dashboard/config.json` (or `$XDG_CONFIG_HOME/
 | `brewServiceProfile` | `"auto"`            | Profile run by `brew services` (always `default`). `"auto"` detects it on startup and saves it; `null` turns this off |
 | `colimaHome`         | Colima's own lookup | `COLIMA_HOME`, else `~/.colima`, else `~/.config/colima`                                                              |
 
-Change the password with `npm run set-password`, or `npm run set-password -- --random` to generate one, then restart colima-dashboard.
+Change the password from the key icon in the dashboard's header; that signs out every other browser. If you've lost it, run `npm run set-password` on the host (or `npm run set-password -- --random` to generate one), then restart colima-dashboard.
 
 ## How it works
 

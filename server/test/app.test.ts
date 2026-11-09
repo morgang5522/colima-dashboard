@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp, CSRF_HEADER } from '../src/app.ts';
 import { Colima, readSettings } from '../src/colima.ts';
-import { hashPassword, resolveConfig } from '../src/config.ts';
+import { hashPassword, resolveConfig, type StoredConfig } from '../src/config.ts';
 import type { DockerClient } from '../src/docker.ts';
 import { toSummary } from '../src/docker.ts';
 import type { Runner } from '../src/exec.ts';
@@ -67,6 +67,7 @@ function setup(runtime = 'docker') {
     {},
   );
   const jobs = new JobRunner();
+  const saved: StoredConfig[] = [];
   const app = createApp({
     config,
     colima: new Colima({ run: runner, colimaHome: home, brewServiceProfile: 'default', dockerReady: async () => true }),
@@ -75,15 +76,16 @@ function setup(runtime = 'docker') {
     docker: () => docker,
     host: { cpus: 12, memoryGiB: 16 },
     clientAddress: () => '127.0.0.1',
+    saveConfig: (changes) => saved.push(changes),
   });
-  return { app, home, commands, actions, jobs, release };
+  return { app, home, commands, actions, jobs, release, saved };
 }
 
-async function login(app: ReturnType<typeof setup>['app']) {
+async function login(app: ReturnType<typeof setup>['app'], password = 'let-me-in-please') {
   const res = await app.request('/api/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json', [CSRF_HEADER]: '1' },
-    body: JSON.stringify({ password: 'let-me-in-please' }),
+    body: JSON.stringify({ password }),
   });
   expect(res.status).toBe(200);
   const cookie = res.headers.get('set-cookie')!.split(';')[0]!;
@@ -114,6 +116,53 @@ describe('auth', () => {
     const { cookie } = await login(app);
     const res = await app.request('/api/profiles/default/vm/stop', { method: 'POST', headers: { cookie } });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('change password', () => {
+  const change = (app: ReturnType<typeof setup>['app'], headers: Record<string, string>, body: object) =>
+    app.request('/api/password', { method: 'POST', headers, body: JSON.stringify(body) });
+
+  it('rejects a wrong current password, a short one and an unchanged one', async () => {
+    const { app, saved } = setup();
+    const headers = await login(app);
+    const wrong = await change(app, headers, { current: 'nope', next: 'a-new-password' });
+    expect(wrong.status).toBe(400);
+    expect(await wrong.json()).toMatchObject({ field: 'current' });
+    const short = await change(app, headers, { current: 'let-me-in-please', next: 'short' });
+    expect(await short.json()).toMatchObject({ field: 'next' });
+    const same = await change(app, headers, { current: 'let-me-in-please', next: 'let-me-in-please' });
+    expect(same.status).toBe(400);
+    expect(saved).toEqual([]);
+  });
+
+  it('needs a session and the CSRF header', async () => {
+    const { app } = setup();
+    const { cookie } = await login(app);
+    expect((await change(app, {}, { current: 'let-me-in-please', next: 'a-new-password' })).status).toBe(401);
+    expect((await change(app, { cookie }, { current: 'let-me-in-please', next: 'a-new-password' })).status).toBe(403);
+  });
+
+  it('saves the new password, signs out other sessions and keeps this one', async () => {
+    const { app, saved } = setup();
+    const other = await login(app);
+    const headers = await login(app);
+    const res = await change(app, headers, { current: 'let-me-in-please', next: 'a-new-password' });
+    expect(res.status).toBe(200);
+    expect(saved).toHaveLength(1);
+    expect(Object.keys(saved[0]!).sort()).toEqual(['passwordHash', 'sessionSecret']);
+
+    const fresh = res.headers.get('set-cookie')!.split(';')[0]!;
+    expect((await app.request('/api/profiles', { headers: { cookie: fresh } })).status).toBe(200);
+    expect((await app.request('/api/profiles', { headers: other })).status).toBe(401);
+
+    const oldLogin = await app.request('/api/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', [CSRF_HEADER]: '1' },
+      body: JSON.stringify({ password: 'let-me-in-please' }),
+    });
+    expect(oldLogin.status).toBe(401);
+    await login(app, 'a-new-password');
   });
 });
 

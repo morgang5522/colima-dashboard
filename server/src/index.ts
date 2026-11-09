@@ -35,6 +35,7 @@ const app = createApp({
   docker: (profile) => new DockerClient(colima.dockerSocket(profile)),
   host: { cpus: cpus().length, memoryGiB: Math.round(totalmem() / 1024 ** 3) },
   clientAddress: (c) => getConnInfo(c).remote.address ?? 'unknown',
+  saveConfig: (changes) => updateStoredConfig(changes),
 });
 
 // The built React app; any non-API path falls back to index.html.

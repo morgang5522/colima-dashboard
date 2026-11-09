@@ -6,6 +6,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 
+- Change the password from the dashboard. Doing so signs out other browsers.
 - Redesigned UI: popover confirmations anchored to the button, a resources popover with steppers, toasts, a collapsible job console, a logs drawer with line filtering, linked published ports, health badges and a running/stopped filter.
 - Manage Colima profiles: status, start, stop, restart, and CPU, memory and disk settings applied on a full restart.
 - Containers grouped by Compose project, with start, stop, restart and live logs, per container and per project.

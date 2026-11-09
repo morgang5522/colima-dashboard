@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline';
-import { CONFIG_PATH, hashPassword, updateStoredConfig } from './config.ts';
+import { CONFIG_PATH, hashPassword, MIN_PASSWORD_LENGTH, updateStoredConfig } from './config.ts';
 
 /**
  * npm run set-password            prompts for a password (input hidden)
@@ -16,7 +16,7 @@ async function setPassword(args: string[]) {
     const again = await promptHidden('Again: ');
     if (password !== again) throw new Error("Passwords don't match.");
   }
-  if (password.length < 8) throw new Error('Use at least 8 characters.');
+  if (password.length < MIN_PASSWORD_LENGTH) throw new Error(`Use at least ${MIN_PASSWORD_LENGTH} characters.`);
   updateStoredConfig({ passwordHash: hashPassword(password) });
   console.log(`Saved to ${CONFIG_PATH}. Restart colima-dashboard for it to take effect.`);
 }

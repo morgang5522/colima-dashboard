@@ -251,6 +251,24 @@ select {
   width: 340px;
 }
 
+.popover-password {
+  width: 300px;
+}
+
+.password-form .field input {
+  height: 34px;
+  font-size: 14px;
+}
+
+.password-form .field .field-error {
+  font-weight: 400;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 2px;
+}
+
 .confirm,
 .settings {
   padding: 14px;

@@ -56,9 +56,12 @@ export interface Host {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Which form field the server blamed, when it says. */
+  field?: string;
+  constructor(status: number, message: string, field?: string) {
     super(message);
     this.status = status;
+    this.field = field;
   }
 }
 
@@ -68,10 +71,10 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json', 'x-colima-dashboard': '1', ...(init.headers ?? {}) },
   });
-  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  const body = (await res.json().catch(() => ({}))) as { error?: string; field?: string };
   if (!res.ok) {
     if (res.status === 401) window.dispatchEvent(new Event('colima-dashboard:signed-out'));
-    throw new ApiError(res.status, body.error ?? `Request failed (${res.status})`);
+    throw new ApiError(res.status, body.error ?? `Request failed (${res.status})`, body.field);
   }
   return body as T;
 }

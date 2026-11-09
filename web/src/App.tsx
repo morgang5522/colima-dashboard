@@ -1,12 +1,14 @@
-import { LogOut } from 'lucide-react';
+import { KeyRound, LogOut } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { api, post, type Host, type Job, type Profile } from './api.ts';
+import { ChangePasswordForm } from './ChangePassword.tsx';
 import { Containers } from './Containers.tsx';
 import { JobConsole } from './JobConsole.tsx';
 import { Login } from './Login.tsx';
 import { Logo } from './Logo.tsx';
 import { MachineCard } from './MachineCard.tsx';
-import { ToastProvider } from './ui/Toasts.tsx';
+import { Popover } from './ui/Popover.tsx';
+import { ToastProvider, useToast } from './ui/Toasts.tsx';
 import { IconButton } from './ui/Tooltip.tsx';
 
 type SessionState = 'loading' | 'signed-out' | 'signed-in';
@@ -38,6 +40,7 @@ export function App() {
 }
 
 function Dashboard({ onSignOut }: { onSignOut: () => void }) {
+  const toast = useToast();
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [host, setHost] = useState<Host | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,9 +100,27 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
             <span>{host.memoryGiB} GiB</span>
           </div>
         )}
-        <IconButton label="Sign out" placement="bottom-end" onClick={signOut}>
-          <LogOut size={16} />
-        </IconButton>
+        <div className="topbar-actions">
+          <Popover
+            className="popover-password"
+            content={(close) => (
+              <ChangePasswordForm
+                onCancel={close}
+                onDone={() => {
+                  close();
+                  toast.success('Password changed. Other browsers have been signed out.');
+                }}
+              />
+            )}
+          >
+            <IconButton label="Change password" placement="bottom-end">
+              <KeyRound size={16} />
+            </IconButton>
+          </Popover>
+          <IconButton label="Sign out" placement="bottom-end" onClick={signOut}>
+            <LogOut size={16} />
+          </IconButton>
+        </div>
       </header>
 
       {error && <div className="notice notice-error">{error}</div>}

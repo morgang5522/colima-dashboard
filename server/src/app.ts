@@ -1,8 +1,9 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { streamSSE } from 'hono/streaming';
-import type { AppConfig } from './config.ts';
-import { verifyPassword } from './config.ts';
+import { randomBytes } from 'node:crypto';
+import type { AppConfig, StoredConfig } from './config.ts';
+import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword } from './config.ts';
 import { validateSettings, type Colima, type HostLimits, type LifecycleAction, type VmSettings } from './colima.ts';
 import { DockerError, groupByProject, type ContainerAction, type DockerClient } from './docker.ts';
 import type { StreamRunner } from './exec.ts';
@@ -18,6 +19,8 @@ export interface AppDeps {
   host: HostLimits;
   /** Client address for login rate limiting. */
   clientAddress: (c: Context) => string;
+  /** Persists config changes (the password hash and session secret). */
+  saveConfig: (changes: StoredConfig) => void;
 }
 
 /** Mutating requests must carry this header: a cross-site form can't set it. */
@@ -31,6 +34,14 @@ export function createApp(deps: AppDeps): Hono {
   const { config, colima, jobs, host } = deps;
   const limiter = new LoginLimiter();
   const app = new Hono();
+
+  const startSession = (c: Context) =>
+    setCookie(c, SESSION_COOKIE, createSessionToken(config.sessionSecret), {
+      httpOnly: true,
+      sameSite: 'Strict',
+      path: '/',
+      maxAge: SESSION_TTL_MS / 1000,
+    });
 
   const authed = (c: Context) => isValidSessionToken(getCookie(c, SESSION_COOKIE), config.sessionSecret);
 
@@ -54,12 +65,7 @@ export function createApp(deps: AppDeps): Hono {
       return c.json({ error: 'Wrong password.' }, 401);
     }
     limiter.reset(ip);
-    setCookie(c, SESSION_COOKIE, createSessionToken(config.sessionSecret), {
-      httpOnly: true,
-      sameSite: 'Strict',
-      path: '/',
-      maxAge: SESSION_TTL_MS / 1000,
-    });
+    startSession(c);
     return c.json({ ok: true });
   });
 
@@ -90,6 +96,31 @@ export function createApp(deps: AppDeps): Hono {
   };
 
   app.get('/api/host', (c) => c.json(host));
+
+  /**
+   * Changes the password. Rotating the session secret signs out every other
+   * browser; this one gets a fresh session so it stays signed in.
+   */
+  app.post('/api/password', async (c) => {
+    const ip = deps.clientAddress(c);
+    if (!limiter.allow(ip)) return c.json({ error: 'Too many attempts. Try again in a minute.' }, 429);
+    const body = (await c.req.json().catch(() => ({}))) as { current?: unknown; next?: unknown };
+    if (typeof body.current !== 'string' || !verifyPassword(body.current, config.passwordHash)) {
+      return c.json({ error: 'Current password is wrong.', field: 'current' }, 400);
+    }
+    if (typeof body.next !== 'string' || body.next.length < MIN_PASSWORD_LENGTH) {
+      return c.json({ error: `Use at least ${MIN_PASSWORD_LENGTH} characters.`, field: 'next' }, 400);
+    }
+    if (body.next === body.current) {
+      return c.json({ error: 'That is the current password.', field: 'next' }, 400);
+    }
+    limiter.reset(ip);
+    const changes = { passwordHash: hashPassword(body.next), sessionSecret: randomBytes(32).toString('hex') };
+    deps.saveConfig(changes);
+    Object.assign(config, changes);
+    startSession(c);
+    return c.json({ ok: true });
+  });
 
   app.get('/api/profiles', async (c) => {
     const profiles = await colima.listProfiles();
